@@ -25,6 +25,7 @@ library(doParallel)
 cluster <- makeCluster(detectCores() - 1) # convention to leave 1 core for OS
 registerDoParallel(cluster)
 
+library(randomForest)
 library(ggplot2) # Data visualization
 library(readr) # CSV file I/O, e.g. the read_csv function
 library(data.table)
@@ -72,7 +73,7 @@ dim(testset)
 #Random Forest
 Here we build a random forest model with the training set containing 54 features on 11776 observations. 
 
-```{r}
+```{r,echo=FALSE}
 #dummies<-dummyVars(classe,data=trains)
 set.seed(125)
 x <- training[,-54]
@@ -82,6 +83,14 @@ myforest<-train(x,y, data=training, method="rf", trControl=fitcontrol)
 cm<-confusionMatrix(testing$classe,predict(myforest,testing))
 cm
 ```
+
+This model has an accuracy of 0.9978 therefore the out of sample rate expected for this model predicting on new observations is 0.22
+
+
+
+#ROC Curve
+
+The ROC curve for the random forest model
 ```{r}
 
 sens<-cm$byClass[,1]
@@ -90,8 +99,17 @@ spec<-1-cm$byClass[,2]
 plot(spec,sens)
 
 
+
 ```
 
+
+
+
+```{r}
+plot(myforest$finalModel)
+
+
+```
 
 #Gradient Boosted Model
 
@@ -133,11 +151,5 @@ Predicting on new data we get the following:
 
 ```{r}
 predict(myforest,testset)
-
-
-plot(myforest$finalModel)
-
-
-
 
 ```
