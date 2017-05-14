@@ -1,30 +1,143 @@
 ---
-title: "Practical Machine Learning Course Project"
+title: "Machine Learning Course Project"
 author: "Damion Rosbrugh"
-date: "May 14, 2017"
+date: "May 13, 2017"
 output: html_document
 ---
+
+
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+## Background
+Through the use of data collected by accelerometers on various wearable electronic devices such as the Fitbit and other such products, it possible to observe a wide range of human motions and decompose those motions into componants which can be used to classify particular activities.
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+We will use data from accelerometers worn on the belt, forearm, arm, and dumbell of 6 people as they performed barbell lifts in five different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+```{r,echo=FALSE,include=FALSE}
+rm(list=ls())
 
-```{r cars}
-summary(cars)
+library(parallel)
+library(doParallel)
+cluster <- makeCluster(detectCores() - 1) # convention to leave 1 core for OS
+registerDoParallel(cluster)
+
+library(ggplot2) # Data visualization
+library(readr) # CSV file I/O, e.g. the read_csv function
+library(data.table)
+library(ggplot2)
+library(caret)
+library(gbm)
+
 ```
 
-## Including Plots
+#Read in the data
+```{r}
+mydat<-read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+mydat_testing<-read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+```
+There are a considerable amount of na values in the data set. All feature columns which contain na values will be removed for both testing and training data, as well as the final validation set.
 
-You can also embed plots, for example:
+```{r}
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+col.na <- colSums(sapply(mydat, is.na))
+#Keep only variables with zero NAs
+tidy <- mydat[,col.na == 0]
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Once the columns containing na values are removed, any variables which show a near zero variance are also removed. In addition the first 5 variables are removed from the data set as they dont possess much predictive power.
+```{r}
+nzv <- nearZeroVar(tidy)
+tidy <- tidy[-nzv]
+
+tidy<-tidy[c(-1,-2,-3,-4,-5)]
+col.na.test <- colSums(sapply(mydat_testing, is.na))
+#Keep only variables with zero NAs
+tidy.test <- mydat_testing[,col.na.test == 0]
+nzv.t <- nearZeroVar(tidy.test)
+tidy.test <- tidy.test[-nzv.t]
+
+tidy.test<-tidy.test[c(-1,-2,-3,-4,-5)]
+testset<-data.frame(tidy.test)
+intrain<- createDataPartition(y=tidy$classe, p=0.6,list=FALSE)
+training<-data.frame(tidy[intrain,])
+testing<-data.frame(tidy[-intrain,])
+dim(training)
+dim(testing)
+dim(testset)
+```
+#Random Forest
+Here we build a random forest model with the training set containing 54 features on 11776 observations. 
+
+```{r}
+#dummies<-dummyVars(classe,data=trains)
+set.seed(125)
+x <- training[,-54]
+y <- training[,54]
+fitcontrol <- trainControl(method = "cv",number = 3,allowParallel = TRUE)
+myforest<-train(x,y, data=training, method="rf", trControl=fitcontrol)
+cm<-confusionMatrix(testing$classe,predict(myforest,testing))
+cm
+```
+```{r}
+
+sens<-cm$byClass[,1]
+spec<-1-cm$byClass[,2]
+
+plot(spec,sens)
+
+
+```
+
+
+#Gradient Boosted Model
+
+A gradient boosted model was fit to the data to compare with the random forest model. It has a lower accuracy and a high misclassification rate.
+```{r}
+gbmmodel <- train(classe~., data=training, method="gbm", trControl=fitcontrol)
+summary(gbmmodel)
+
+
+
+
+predictiong<-predict(gbmmodel,newdata = testing[,-54])
+cm2<-confusionMatrix(testing$classe,predictiong)
+
+
+
+sens2<-cm2$byClass[,1]
+spec2<-1-cm2$byClass[,2]
+
+plot(spec2,sens2)
+
+
+
+stopCluster(cluster)
+registerDoSEQ()
+
+```
+
+```{r}
+library(lattice)
+resampled <- resamples(list(rf=myforest,gbm=gbmmodel))
+summary(resampled)
+
+```
+
+#Predicting Test Cases
+Predicting on new data we get the following:
+
+
+```{r}
+predict(myforest,testset)
+
+
+plot(myforest$finalModel)
+
+
+
+
+```
