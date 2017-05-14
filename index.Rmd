@@ -113,30 +113,38 @@ plot(myforest$finalModel)
 
 #Gradient Boosted Model
 
-A gradient boosted model was fit to the data to compare with the random forest model. It has a lower accuracy and a high misclassification rate.
+A gradient boosted model was fit to the data to compare with the random forest model. It has a lower accuracy and a higher misclassification rate.
 ```{r}
 gbmmodel <- train(classe~., data=training, method="gbm", trControl=fitcontrol)
 summary(gbmmodel)
 
 
-
-
 predictiong<-predict(gbmmodel,newdata = testing[,-54])
 cm2<-confusionMatrix(testing$classe,predictiong)
 
+cm2
+```
 
 
+
+
+```{r}
 sens2<-cm2$byClass[,1]
 spec2<-1-cm2$byClass[,2]
 
 plot(spec2,sens2)
 
-
-
 stopCluster(cluster)
 registerDoSEQ()
 
 ```
+
+
+
+#Model Selection
+
+Comparing resampled values from both model fits, we see that the random forest algorithm out performs the gradient boosted model. 
+
 
 ```{r}
 library(lattice)
@@ -146,8 +154,7 @@ summary(resampled)
 ```
 
 #Predicting Test Cases
-Predicting on new data we get the following:
-
+Predicting on new data, an out of sample error rate of 0.22 is expected.
 
 ```{r}
 predict(myforest,testset)
